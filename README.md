@@ -72,7 +72,7 @@ Choose a mode in the launcher, or pass `--access`:
 | `cloudflare` | Anyone with the link | Free https quick tunnel, no account; needs `cloudflared` |
 | `tailscale`  | Your tailnet         | Tailscale address only                                   |
 
-Other options: `--port` (8787), `--cwd`, `--data` (`~/.pi-pocket`), `--host`, and `-y` to reuse the last access choice. `npm start -- --help` lists them all. `PI_POCKET_BROWSER` and `PI_POCKET_BROWSER_ARGS` pick the built-in browser and its flags when Chromium or Chrome is not found by itself.
+Other options: `--port` (8787), `--cwd`, `--data` (`~/.pi-pocket`), `--host`, and `-y` to reuse the last access choice. `npm start -- --help` lists them all. `PI_POCKET_BROWSER` and `PI_POCKET_BROWSER_ARGS` pick the built-in browser and its flags when Chromium or Chrome is not found by itself. `PI_POCKET_BROWSER_URL` or `--browser-url` to specify a a CDP endpoint, to use a browser Pi Pocket does not start.
 
 > [!WARNING]
 > Anyone who can steer a session can make Pi run commands on this machine, as you. That reaches your files, Pi Pocket's own settings and tokens, and its code. Invite only people you would trust at your keyboard. View-only users cannot make Pi act. [SECURITY.md](SECURITY.md) says what is protected and what is not.
