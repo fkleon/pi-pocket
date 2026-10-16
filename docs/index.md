@@ -46,6 +46,12 @@ A drop-in extension stays when Pi Pocket updates, and the owner can turn it off 
 
 The same pages are on the web, with search: https://tannermidd.github.io/pi-pocket/docs/.
 
+## Plans
+
+Proposals for changes that are not in the code yet. A plan describes intended behavior; the guides above describe what exists.
+
+- [plans/remote-cdp-browser.md](plans/remote-cdp-browser.md): reaching a browser over a WebSocket CDP endpoint instead of a child process's pipe.
+
 ## Before you change anything
 
 - **Ask first.** A change to Pi Pocket reaches each person who uses it, at once. Say what you will change and why. Then wait for a yes, unless the person asked for exactly that change.
