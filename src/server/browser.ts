@@ -99,23 +99,8 @@ export class Browsers {
         return this.#sourceCache;
     }
 
-    #findSource(): BrowserSource | undefined {
-        if (this.#options.source !== undefined) {
-            return this.#options.source;
-        }
-
-        const endpoint = process.env.PI_POCKET_BROWSER_URL?.trim();
-
-        if (endpoint !== undefined && endpoint !== "") {
-            return new RemoteBrowser(endpoint);
-        }
-
-        const executable = this.executable;
-
-        if (executable === undefined) {
-            return undefined;
-        }
-
+    /** A Chromium on this machine, with the extra flags this app passes it. */
+    #localSource(executable: string): LocalBrowser {
         const extra = [
             ...(this.#options.args ?? []),
             ...(process.env.PI_POCKET_BROWSER_ARGS?.split(/\s+/).filter(Boolean) ?? []),
@@ -126,6 +111,32 @@ export class Browsers {
             profileFolder(executable, this.#options.dataDir),
             extra,
         );
+    }
+
+    #findSource(): BrowserSource | undefined {
+        // What a caller gave wins: a source, an executable, or `null` for none (tests).
+        if (this.#options.source !== undefined) {
+            return this.#options.source;
+        }
+
+        if (this.#options.executable === null) {
+            return undefined;
+        }
+
+        if (this.#options.executable !== undefined) {
+            return this.#localSource(this.#options.executable);
+        }
+
+        // Nothing given: a configured endpoint, or a browser found on this machine.
+        const endpoint = process.env.PI_POCKET_BROWSER_URL?.trim();
+
+        if (endpoint !== undefined && endpoint !== "") {
+            return new RemoteBrowser(endpoint);
+        }
+
+        const executable = this.executable;
+
+        return executable === undefined ? undefined : this.#localSource(executable);
     }
 
     get available(): boolean {
