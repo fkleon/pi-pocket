@@ -54,6 +54,8 @@ export class Browsers {
     /** The source, worked out once: `null` means there is none. */
     #sourceCache: BrowserSource | undefined | null = null;
     readonly #pages = new Map<number, BrowserPage>();
+    /** The browser contexts this app made, to tell its targets from a shared browser's others. */
+    readonly #contexts = new Set<string>();
     readonly #opening = new Map<number, Promise<BrowserPage>>();
     readonly #listeners = new Set<(conversationId: number, state: BrowserState) => void>();
     readonly #pending = new Map<number, NodeJS.Timeout>();
@@ -120,6 +122,11 @@ export class Browsers {
 
     get available(): boolean {
         return this.#source()?.available ?? false;
+    }
+
+    /** Whether the browser is one Pi Pocket reaches over CDP, not one it starts. */
+    get remote(): boolean {
+        return this.#source() instanceof RemoteBrowser;
     }
 
     subscribe(listener: (conversationId: number, state: BrowserState) => void): () => void {
@@ -233,6 +240,11 @@ export class Browsers {
                 return;
             }
 
+            // A shared browser reports every target; only the contexts this app made are ours.
+            if (info.browserContextId !== undefined && !this.#contexts.has(info.browserContextId)) {
+                return;
+            }
+
             for (const [id, page] of this.#pages) {
                 // A page closed by its own script (window.close()) is gone, with its browser context.
                 if (method === "Target.targetDestroyed" && info.targetId === page.targetId) {
@@ -312,6 +324,8 @@ export class Browsers {
         const { browserContextId } = await connection.send("Target.createBrowserContext", {
             disposeOnDetach: false,
         });
+
+        this.#contexts.add(browserContextId);
         let page: BrowserPage | undefined;
 
         try {
@@ -361,6 +375,7 @@ export class Browsers {
             return page;
         } catch (error) {
             page?.close();
+            this.#contexts.delete(browserContextId);
             void connection
                 .send("Target.disposeBrowserContext", { browserContextId })
                 .catch(() => {});
@@ -385,6 +400,7 @@ export class Browsers {
         }
 
         page.close();
+        this.#contexts.delete(page.contextId);
 
         if (this.#pages.size === 0) {
             this.#idleSince = Date.now();
@@ -448,6 +464,7 @@ export class Browsers {
         }
 
         this.#pages.clear();
+        this.#contexts.clear();
 
         if (options.final === true) {
             // After the pages closed, which announces them: nobody listens any more.
