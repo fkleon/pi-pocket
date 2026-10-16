@@ -9,7 +9,12 @@ import { PassThrough } from "node:stream";
 import { after, before, test } from "node:test";
 import { Agent } from "undici";
 import { Browsers } from "../src/server/browser.ts";
-import { PipeChannel } from "../src/server/browser/cdp.ts";
+import {
+    type BrowserSource,
+    type Channel,
+    Connection,
+    PipeChannel,
+} from "../src/server/browser/cdp.ts";
 import { findBrowser } from "../src/server/browser/discovery.ts";
 import { RemoteBrowser, resolveEndpoint } from "../src/server/browser/remote.ts";
 import { SocketChannel } from "../src/server/browser/socket.ts";
@@ -202,3 +207,100 @@ test(
         }
     },
 );
+
+/** The replies a fake browser gives, enough for `Browsers` to open a page. */
+const REPLIES: Record<string, unknown> = {
+    "Target.createBrowserContext": { browserContextId: "ctx-1" },
+    "Target.createTarget": { targetId: "target-1" },
+    "Target.attachToTarget": { sessionId: "session-1" },
+    "Page.getFrameTree": { frameTree: { frame: { id: "frame-1" } } },
+};
+
+/** A CDP channel that answers every request itself, so a test can drive `Browsers` without a browser. */
+class FakeChannel implements Channel {
+    #onMessage: ((message: string) => void) | undefined;
+    #onClose: ((reason: string) => void) | undefined;
+    #closed = false;
+
+    onMessage(handler: (message: string) => void): void {
+        this.#onMessage = handler;
+    }
+
+    onClose(handler: (reason: string) => void): void {
+        this.#onClose = handler;
+    }
+
+    write(message: string): void {
+        const request = JSON.parse(message) as { id: number; method: string };
+        const result = REPLIES[request.method] ?? {};
+
+        queueMicrotask(() => {
+            if (!this.#closed) {
+                this.#onMessage?.(JSON.stringify({ id: request.id, result }));
+            }
+        });
+    }
+
+    close(reason: string): void {
+        if (this.#closed) {
+            return;
+        }
+
+        this.#closed = true;
+        this.#onClose?.(reason);
+    }
+}
+
+test("a dropped browser is reconnected, and its pages are open again", async () => {
+    const channels: FakeChannel[] = [];
+    let connects = 0;
+    const source: BrowserSource = {
+        label: "fake",
+        available: true,
+        connect: async () => {
+            connects++;
+            const channel = new FakeChannel();
+
+            let done: () => void = () => {};
+
+            const exited = new Promise<void>((resolve) => {
+                done = resolve;
+            });
+
+            channels.push(channel);
+
+            return {
+                connection: new Connection(channel),
+                userAgent: "fake",
+                exited,
+                stop: () => done(),
+            };
+        },
+    };
+    const browsers = new Browsers({
+        dataDir: tmpdir(),
+        source,
+        load: async () => undefined,
+        save: () => {},
+    });
+
+    try {
+        await browsers.open(1);
+        assert.equal(connects, 1);
+        assert.notEqual(browsers.page(1), undefined);
+
+        // The browser drops; a moment later it is back, with the page open again.
+        channels[0]!.close("dropped");
+        const deadline = Date.now() + 5000;
+
+        while (connects < 2 || browsers.page(1) === undefined) {
+            if (Date.now() > deadline) {
+                throw new Error(`no reconnect after ${connects} connects`);
+            }
+
+            await new Promise((done) => setTimeout(done, 10));
+        }
+    } finally {
+        await browsers.closeAll({ final: true });
+    }
+});

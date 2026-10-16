@@ -16,6 +16,10 @@ import { BrowserPage, type BrowserState, type Saved, wait } from "./browser/page
 import { type Viewport, VIEWPORTS, viewportFrom } from "./browser/viewport.ts";
 import { describe } from "./errors.ts";
 
+/** How long to wait before the first reconnect, and the longest between tries. */
+const RECONNECT_BASE_MS = 1000;
+const RECONNECT_MAX_MS = 30_000;
+
 export type OpenOptions = {
     /** The size of a page that has no saved size. */
     viewport?: Viewport;
@@ -56,6 +60,10 @@ export class Browsers {
     readonly #pages = new Map<number, BrowserPage>();
     /** The browser contexts this app made, to tell its targets from a shared browser's others. */
     readonly #contexts = new Set<string>();
+    /** Conversations whose pages should be open: kept across a drop, to reopen them. */
+    readonly #wanted = new Set<number>();
+    #reconnect: NodeJS.Timeout | undefined;
+    #reconnectAttempt = 0;
     readonly #opening = new Map<number, Promise<BrowserPage>>();
     readonly #listeners = new Set<(conversationId: number, state: BrowserState) => void>();
     readonly #pending = new Map<number, NodeJS.Timeout>();
@@ -256,12 +264,23 @@ export class Browsers {
         };
 
         link.connection.onClose = () => {
-            if (this.#link === connecting) {
+            // A link this app already let go of (stopped, or closed on purpose) is not one to bring back.
+            const dropped = this.#link === connecting;
+
+            if (dropped) {
                 this.#link = undefined;
             }
 
             for (const page of this.#pages.values()) {
                 page.close();
+            }
+
+            if (dropped) {
+                this.#pages.clear();
+
+                if (this.#wanted.size > 0) {
+                    this.#scheduleReconnect();
+                }
             }
         };
 
@@ -362,6 +381,7 @@ export class Browsers {
             }
 
             this.#pages.set(conversationId, page);
+            this.#wanted.add(conversationId);
             this.#idleSince = Date.now();
 
             if (options.restore !== false && saved?.url !== undefined && saved.url !== "") {
@@ -399,6 +419,7 @@ export class Browsers {
             this.#pages.delete(conversationId);
         }
 
+        this.#wanted.delete(conversationId);
         page.close();
         this.#contexts.delete(page.contextId);
 
@@ -434,6 +455,57 @@ export class Browsers {
         }
     }
 
+    /** Bring the browser back after an unexpected drop, and reopen the pages that were open. */
+    #scheduleReconnect(): void {
+        if (this.#reconnect !== undefined || this.#closing) {
+            return;
+        }
+
+        const delay = Math.min(
+            RECONNECT_MAX_MS,
+            RECONNECT_BASE_MS * 2 ** Math.min(this.#reconnectAttempt, 5),
+        );
+
+        this.#reconnectAttempt++;
+        const timer = setTimeout(() => {
+            this.#reconnect = undefined;
+            void this.#reconnectNow();
+        }, delay);
+
+        timer.unref();
+        this.#reconnect = timer;
+    }
+
+    async #reconnectNow(): Promise<void> {
+        if (this.#closing || this.#wanted.size === 0) {
+            return;
+        }
+
+        try {
+            await this.#browser();
+        } catch (error) {
+            this.#options.log?.(`Could not reach the browser again: ${describe(error)}`);
+            this.#scheduleReconnect();
+
+            return;
+        }
+
+        this.#reconnectAttempt = 0;
+        this.#options.log?.("Browser reconnected.");
+
+        for (const id of [...this.#wanted]) {
+            if (this.#closing || !this.#wanted.has(id)) {
+                continue;
+            }
+
+            try {
+                await this.open(id, { restore: true });
+            } catch {
+                // The page could not open; it stays wanted, and the next drop tries again.
+            }
+        }
+    }
+
     async #stopBrowser(): Promise<void> {
         const pending = this.#link;
 
@@ -451,6 +523,14 @@ export class Browsers {
     /** Close every page and stop the browser, as the server stops or the browser is turned off. */
     async closeAll(options: { final?: boolean } = {}): Promise<void> {
         this.#generation++;
+
+        if (this.#reconnect !== undefined) {
+            clearTimeout(this.#reconnect);
+            this.#reconnect = undefined;
+        }
+
+        this.#reconnectAttempt = 0;
+        this.#wanted.clear();
 
         if (options.final === true) {
             this.#closing = true;
