@@ -30,6 +30,7 @@ function parseArgs(argv: string[]) {
         port: Number(process.env.PI_POCKET_PORT ?? 8787),
         cwd: process.cwd(),
         data: dataDir(),
+        browserUrl: process.env.PI_POCKET_BROWSER_URL,
         rotateToken: false,
     };
 
@@ -54,11 +55,13 @@ function parseArgs(argv: string[]) {
             options.cwd = resolve(value());
         } else if (arg === "--data") {
             options.data = resolve(value());
+        } else if (arg === "--browser-url") {
+            options.browserUrl = value();
         } else if (arg === "--rotate-token") {
             options.rotateToken = true;
         } else if (arg === "--help" || arg === "-h") {
             console.log(
-                "pi-pocket [--host 127.0.0.1] [--port 8787] [--cwd DIR] [--data DIR] [--rotate-token]",
+                "pi-pocket [--host 127.0.0.1] [--port 8787] [--cwd DIR] [--data DIR] [--browser-url URL] [--rotate-token]",
             );
             process.exit(0);
         } else {
@@ -68,6 +71,10 @@ function parseArgs(argv: string[]) {
 
     if (!Number.isInteger(options.port) || options.port <= 0) {
         throw new Error("--port must be a number");
+    }
+
+    if (options.browserUrl !== undefined && options.browserUrl !== "") {
+        process.env.PI_POCKET_BROWSER_URL = options.browserUrl;
     }
 
     return options;

@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { PassThrough } from "node:stream";
 import { after, before, test } from "node:test";
 import { Agent } from "undici";
+import { Browsers } from "../src/server/browser.ts";
 import { PipeChannel } from "../src/server/browser/cdp.ts";
 import { findBrowser } from "../src/server/browser/discovery.ts";
 import { RemoteBrowser, resolveEndpoint } from "../src/server/browser/remote.ts";
@@ -135,6 +136,20 @@ test("a browser endpoint becomes its WebSocket URL", async () => {
         /did not offer/,
     );
     await assert.rejects(resolveEndpoint(`${base}/nope`, dispatcher), /answered 500/);
+});
+
+test("a browser is remote only when it comes from a CDP endpoint", () => {
+    const options = { dataDir: tmpdir(), load: async () => undefined, save: () => {} };
+    const remote = new Browsers({
+        ...options,
+        source: new RemoteBrowser("ws://127.0.0.1:1/devtools/b/x"),
+    });
+    const local = new Browsers({ ...options, executable: null });
+
+    assert.equal(remote.remote, true);
+    assert.equal(remote.available, true);
+    assert.equal(local.remote, false);
+    assert.equal(local.available, false);
 });
 
 // The whole remote path against real Chrome: its own debugging port, and the WebSocket transport.

@@ -19,10 +19,13 @@ Usage: pi-pocket [options]
       --cwd DIR       Folder for new sessions (default: the current folder)
       --data DIR      Data folder (default ~/.pi-pocket)
       --host HOST     Listen on this address instead of choosing an access mode
+      --browser-url URL
+                      A CDP endpoint for the built-in browser, instead of one found here
       --rotate-token  Replace the owner sign-in link, signing out the devices that used it
   -h, --help          Show this help
 
-Environment: PI_POCKET_ACCESS, PI_POCKET_PORT, PI_POCKET_DIR, PI_POCKET_HOST, PI_POCKET_GUARD=off`;
+Environment: PI_POCKET_ACCESS, PI_POCKET_PORT, PI_POCKET_DIR, PI_POCKET_HOST, PI_POCKET_GUARD=off,
+PI_POCKET_BROWSER_URL`;
 
 export interface Options {
     access: AccessMode | undefined;
@@ -31,6 +34,7 @@ export interface Options {
     port: number;
     cwd: string;
     data: string;
+    browserUrl: string | undefined;
     rotateToken: boolean;
 }
 
@@ -43,6 +47,7 @@ export function parseArgs(argv: string[]): Options {
         port: Number(process.env.PI_POCKET_PORT ?? 8787),
         cwd: process.cwd(),
         data: resolve(process.env.PI_POCKET_DIR ?? join(homedir(), ".pi-pocket")),
+        browserUrl: process.env.PI_POCKET_BROWSER_URL || undefined,
         rotateToken: false,
     };
 
@@ -77,6 +82,8 @@ export function parseArgs(argv: string[]): Options {
             options.cwd = resolve(value());
         } else if (arg === "--data") {
             options.data = resolve(value());
+        } else if (arg === "--browser-url") {
+            options.browserUrl = value();
         } else if (arg === "--rotate-token") {
             options.rotateToken = true;
         } else if (arg === "--help" || arg === "-h") {
