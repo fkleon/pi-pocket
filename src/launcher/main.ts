@@ -449,6 +449,10 @@ function startServer(first: boolean): void {
         options.data,
     ];
 
+    if (options.browserUrl !== undefined) {
+        args.push("--browser-url", options.browserUrl);
+    }
+
     if (first && options.rotateToken) {
         args.push("--rotate-token");
     }
