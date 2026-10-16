@@ -122,16 +122,17 @@ A module split into parts keeps its name for the part others import, with the re
 
 ### The built-in browser: `browser.ts` and `browser/`
 
-| File                                     | Owns                                                                                                                                       |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `browser.ts`                             | `Browsers`: one headless Chromium for every conversation, started with the first page and stopped after the last; each conversation's page |
-| `browser/page.ts`                        | `BrowserPage`: one conversation's page: its events, screencast frames, console, navigation, and what Pi and people do to it                |
-| `browser/cdp.ts`                         | The DevTools protocol over a pipe (`--remote-debugging-pipe`), and the Chromium process; `BrowserError`                                    |
-| `browser/discovery.ts`                   | Finding a Chromium-based browser on this machine, and where its profile goes                                                               |
-| `browser/page-scripts.ts`                | The scripts that run inside a page: the outline with refs for Pi, finding a target, selecting                                              |
-| `browser/keys.ts`                        | Key names and combinations as key events                                                                                                   |
-| `browser/viewport.ts`, `browser/urls.ts` | Page sizes and their presets; what people and Pi type, made into addresses                                                                 |
-| `browser/local-servers.ts`               | The web servers running on this machine, for the panel's start screen                                                                      |
+| File                                     | Owns                                                                                                                                                                                                                 |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `browser.ts`                             | `Browsers`: one headless Chromium for every conversation, started with the first page and stopped after the last; each conversation's page                                                                           |
+| `browser/page.ts`                        | `BrowserPage`: one conversation's page: its events, screencast frames, console, navigation, and what Pi and people do to it                                                                                          |
+| `browser/cdp.ts`                         | The DevTools protocol over a `Channel` (a pipe, or a WebSocket), and the bookkeeping above it; `BrowserSource` (`LocalBrowser` starts Chromium, `RemoteBrowser` connects to `PI_POCKET_BROWSER_URL`); `BrowserError` |
+| `browser/socket.ts`, `browser/remote.ts` | A WebSocket CDP channel, and a browser reached over it (`/json/version` discovery, connect, handshake)                                                                                                               |
+| `browser/discovery.ts`                   | Finding a Chromium-based browser on this machine, and where its profile goes                                                                                                                                         |
+| `browser/page-scripts.ts`                | The scripts that run inside a page: the outline with refs for Pi, finding a target, selecting                                                                                                                        |
+| `browser/keys.ts`                        | Key names and combinations as key events                                                                                                                                                                             |
+| `browser/viewport.ts`, `browser/urls.ts` | Page sizes and their presets; what people and Pi type, made into addresses                                                                                                                                           |
+| `browser/local-servers.ts`               | The web servers running on this machine, for the panel's start screen                                                                                                                                                |
 
 ### Elsewhere
 

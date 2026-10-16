@@ -867,7 +867,7 @@ export function BrowserPanel({ leaving = false }) {
         stage = html`<div class="browser-note">
             <${Icon} name="globe" size=${28} />
             <p>
-                No browser was found on the machine Pi Pocket runs on. Install Chromium or Google Chrome there (or set <code>PI_POCKET_BROWSER</code> to a browser's path), then restart Pi Pocket.
+                No browser was found on the machine Pi Pocket runs on. Install Chromium or Google Chrome there, or set <code>PI_POCKET_BROWSER</code> to a browser's path or <code>PI_POCKET_BROWSER_URL</code> to a DevTools endpoint, then restart Pi Pocket.
             </p>
         </div>`;
     } else if (!open && why) {
