@@ -3,6 +3,8 @@
  * own the process: `stop` closes the socket, and a browser that stays up serves the next connection. The endpoint is
  * `ws(s)://…` as given, or an `http(s)://…` address whose `/json/version` names the WebSocket.
  */
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 import { Agent, fetch } from "undici";
 import {
     BrowserError,
@@ -14,12 +16,39 @@ import {
 import { openSocket, SocketChannel } from "./socket.ts";
 import { describe } from "../errors.ts";
 
+/**
+ * The URL to reach: for a plain http/ws endpoint, the address its host resolves to. Chromium refuses a `Host` header
+ * that is a name rather than an IP (its DNS-rebinding guard), so `http://chromedp:9222` would answer 500. A TLS
+ * endpoint keeps its name: its certificate is for the name.
+ */
+async function reachable(url: string): Promise<string> {
+    const parsed = new URL(url);
+
+    if (parsed.protocol === "https:" || parsed.protocol === "wss:" || isIP(parsed.hostname) !== 0) {
+        return parsed.toString();
+    }
+
+    let address: string;
+
+    try {
+        address = (await lookup(parsed.hostname)).address;
+    } catch (error) {
+        throw new BrowserError(
+            `Could not find the browser host ${parsed.hostname}: ${describe(error)}`,
+        );
+    }
+
+    parsed.host = isIP(address) === 6 ? `[${address}]` : address;
+
+    return parsed.toString();
+}
+
 /** The browser-level WebSocket URL for an endpoint. */
 export async function resolveEndpoint(url: string, dispatcher?: Agent): Promise<string> {
     const trimmed = url.trim();
 
     if (/^wss?:\/\//i.test(trimmed)) {
-        return trimmed;
+        return reachable(trimmed);
     }
 
     if (!/^https?:\/\//i.test(trimmed)) {
@@ -35,7 +64,10 @@ export async function resolveEndpoint(url: string, dispatcher?: Agent): Promise<
     let response: Awaited<ReturnType<typeof fetch>>;
 
     try {
-        response = await fetch(version, dispatcher === undefined ? {} : { dispatcher });
+        response = await fetch(
+            await reachable(version.toString()),
+            dispatcher === undefined ? {} : { dispatcher },
+        );
     } catch (error) {
         throw new BrowserError(`Could not reach the browser at ${url}: ${describe(error)}`);
     }
@@ -52,7 +84,7 @@ export async function resolveEndpoint(url: string, dispatcher?: Agent): Promise<
         throw new BrowserError(`The browser at ${url} did not offer a DevTools WebSocket.`);
     }
 
-    return socket;
+    return reachable(socket);
 }
 
 export class RemoteBrowser implements BrowserSource {
