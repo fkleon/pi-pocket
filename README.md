@@ -134,7 +134,7 @@ The flake builds Pi Pocket (`nix run github:TannerMidd/pi-pocket`) and has a Nix
 | `--host`          |                | Listen on a specific address instead of choosing access           |
 | `--rotate-token`  |                | Issue a new owner link and sign out devices that used the old one |
 
-Environment variables: `PI_POCKET_ACCESS`, `PI_POCKET_DIR`, `PI_POCKET_HOST`, `PI_POCKET_PORT`, `PI_POCKET_GUARD=off`, `PI_POCKET_BROWSER` (the browser to run, when Chromium or Chrome is not found by itself), and `PI_POCKET_BROWSER_ARGS` (extra flags for it, such as `--no-sandbox` where sandboxes are unavailable). Without a terminal (under systemd, for example), the launcher uses `--access` or the last choice.
+Environment variables: `PI_POCKET_ACCESS`, `PI_POCKET_DIR`, `PI_POCKET_HOST`, `PI_POCKET_PORT`, `PI_POCKET_GUARD=off`, `PI_POCKET_BROWSER` (the browser to run, when Chromium or Chrome is not found by itself), `PI_POCKET_BROWSER_URL` (a CDP endpoint, such as `http://headless-shell:9222` or a `ws://` URL, to use a browser Pi Pocket does not start), and `PI_POCKET_BROWSER_ARGS` (extra flags for it, such as `--no-sandbox` where sandboxes are unavailable). Without a terminal (under systemd, for example), the launcher uses `--access` or the last choice.
 
 ## Architecture
 
