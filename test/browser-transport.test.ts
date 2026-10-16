@@ -157,53 +157,84 @@ test("a browser is remote only when it comes from a CDP endpoint", () => {
     assert.equal(local.available, false);
 });
 
-// The whole remote path against real Chrome: its own debugging port, and the WebSocket transport.
+/** The CDP endpoint to test against: one that is configured, or a local Chromium's own debugging port. */
+async function cdpEndpoint(): Promise<{ endpoint: string; stop: () => void } | undefined> {
+    const configured = process.env.PI_POCKET_BROWSER_URL?.trim();
+
+    if (configured !== undefined && configured !== "") {
+        return { endpoint: configured, stop: () => {} };
+    }
+
+    const executable = findBrowser();
+
+    if (executable === undefined) {
+        return undefined;
+    }
+
+    const child = spawn(
+        executable,
+        [
+            "--headless=new",
+            "--remote-debugging-port=0",
+            "--no-first-run",
+            `--user-data-dir=${mkdtempSync(join(tmpdir(), "pi-cdp-"))}`,
+            "about:blank",
+        ],
+        { stdio: ["ignore", "ignore", "pipe"] },
+    );
+    const stop = () => child.kill("SIGKILL");
+
+    try {
+        const url = await new Promise<string>((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error("no DevTools URL")), 20_000);
+            let text = "";
+
+            child.stderr!.setEncoding("utf8");
+            child.stderr!.on("data", (chunk: string) => {
+                text += chunk;
+                const found = /ws:\/\/\S+/.exec(text);
+
+                if (found !== null) {
+                    clearTimeout(timer);
+                    resolve(found[0]);
+                }
+            });
+            child.once("exit", () => {
+                clearTimeout(timer);
+                reject(new Error("the browser exited"));
+            });
+        });
+
+        return { endpoint: url, stop };
+    } catch (error) {
+        stop();
+
+        throw error;
+    }
+}
+
+// The whole remote path against a real browser: a configured CDP endpoint, or a local Chromium's own debugging port.
 test(
     "a browser reached over its WebSocket answers the handshake",
-    { skip: findBrowser() === undefined ? "no Chromium-based browser on this machine" : false },
+    {
+        skip:
+            (process.env.PI_POCKET_BROWSER_URL?.trim() ?? "") === "" && findBrowser() === undefined
+                ? "no local browser and no PI_POCKET_BROWSER_URL"
+                : false,
+    },
     async () => {
-        const child = spawn(
-            findBrowser()!,
-            [
-                "--headless=new",
-                "--remote-debugging-port=0",
-                "--no-first-run",
-                `--user-data-dir=${mkdtempSync(join(tmpdir(), "pi-cdp-"))}`,
-                "about:blank",
-            ],
-            { stdio: ["ignore", "ignore", "pipe"] },
-        );
+        const found = await cdpEndpoint();
+
+        assert.ok(found !== undefined, "an endpoint to test");
+
+        const link = await new RemoteBrowser(found.endpoint).connect();
 
         try {
-            const url = await new Promise<string>((resolve, reject) => {
-                const timer = setTimeout(() => reject(new Error("no DevTools URL")), 20_000);
-                let text = "";
-
-                child.stderr!.setEncoding("utf8");
-                child.stderr!.on("data", (chunk: string) => {
-                    text += chunk;
-                    const found = /ws:\/\/\S+/.exec(text);
-
-                    if (found !== null) {
-                        clearTimeout(timer);
-                        resolve(found[0]);
-                    }
-                });
-                child.once("exit", () => {
-                    clearTimeout(timer);
-                    reject(new Error("the browser exited"));
-                });
-            });
-            const link = await new RemoteBrowser(url).connect();
-
-            try {
-                assert.equal(link.connection.closed, false);
-                assert.ok(link.userAgent.length > 0, "the handshake gave a user agent");
-            } finally {
-                link.stop();
-            }
+            assert.equal(link.connection.closed, false);
+            assert.ok(link.userAgent.length > 0, "the handshake gave a user agent");
         } finally {
-            child.kill("SIGKILL");
+            link.stop();
+            found.stop();
         }
     },
 );
