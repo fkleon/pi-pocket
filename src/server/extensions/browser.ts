@@ -52,6 +52,11 @@ const GUIDE = `The browser tool is a real Chromium on this machine. The people i
 - Start a dev server in the background with bash first (\`nohup npm run dev > /tmp/dev.log 2>&1 &\`), then navigate to it.
 - snapshot gives refs like [e12] for click, type, select, and hover, valid until the next snapshot. screenshot shows the layout; viewport changes the size. After a change, check console for errors.`;
 
+/** A browser reached over CDP runs apart from Pi Pocket: its network and files are its own, not this machine's. */
+const REMOTE_NOTE = `
+
+The browser runs apart from this machine: its localhost and files are its own. Reach a dev server by an address this machine can reach (a host name on the network), and do not expect this machine's file paths to open.`;
+
 function clip(text: string, max = MAX_TEXT): string {
     return text.length > max
         ? `${text.slice(0, max)}\n… (${text.length - max} more characters)`
@@ -465,7 +470,9 @@ export default function createBrowser(host: PocketHost) {
         tools: [browser],
         sections: [
             section("browser", (input) =>
-                input.agent.tools.some((tool) => tool.name === "browser") ? GUIDE : undefined,
+                input.agent.tools.some((tool) => tool.name === "browser")
+                    ? `${GUIDE}${host.browsers.remote ? REMOTE_NOTE : ""}`
+                    : undefined,
             ),
         ],
     });
