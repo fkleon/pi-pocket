@@ -191,8 +191,3 @@ volumes:
     pi-pocket-data:
     pi-data:
     pi-workspace:
-      driver: local
-      driver_opts:
-        type: none
-        o: bind
-        device: ./workspace
