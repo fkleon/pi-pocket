@@ -5,20 +5,12 @@ WORKDIR /app
 COPY package.json package-lock.json /app
 RUN ["npm", "ci", "--omit=dev"]
 
-#COPY --parents bin/ docs/ src/ web/ /app
-COPY . /app
+COPY --parents bin/ docs/ src/ types/ web/ /app
 
 RUN ["mkdir", "--parents", "/home/nonroot/.pi", "/home/nonroot/.pi-pocket"]
 
 FROM gcr.io/distroless/nodejs24-debian13:nonroot AS app
 
-# Application and depenencies
-#WORKDIR /app
-#COPY package.json package-lock.json /app
-#RUN ["npm", "ci", "--omit=dev"]
-
-#COPY --parents bin/ docs/ src/ web/ /app
-#COPY . /app
 COPY --from=build /app /app
 
 # App config
