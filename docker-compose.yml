@@ -165,6 +165,7 @@ services:
     networks:
       - internal
     volumes:
+      - pi-home:/home/nonroot
       - pi-data:/home/nonroot/.pi
       - pi-pocket-data:/home/nonroot/.pi-pocket
       - pi-workspace:/workspace
@@ -188,6 +189,7 @@ services:
       - internal
 
 volumes:
+    pi-home:
     pi-pocket-data:
     pi-data:
     pi-workspace:
