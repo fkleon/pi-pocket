@@ -23,7 +23,7 @@ WORKDIR /workspace
 RUN groupadd --system --gid 65532 nonroot \
  && useradd --system --uid 65532 --gid nonroot --no-create-home nonroot
 
-RUN mkdir /home/nonroot && chown -R nonroot:nonroot /home/nonroot
+RUN mkdir /home/nonroot && chown -R nonroot:nonroot /home/nonroot /workspace
 
 USER 65532
 

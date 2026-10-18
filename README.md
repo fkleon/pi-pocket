@@ -34,30 +34,7 @@ While it runs: **q** quit · **r** restart server · **a** change access · **o*
 
 ### Docker
 
-```bash
-docker build -t pi-pocket .
-docker run --rm -p 8787:8787 \
-  -v pi-pocket-data:/data \
-  -v "$PWD":/workspace \
-  pi-pocket
-```
-
-The named volume keeps Pi Pocket's data across container replacements; the mounted folder is the working directory
-for new sessions. The launcher prints the owner sign-in link in the container logs—keep it private. On Docker bridge
-networks, if the printed container address is not reachable, replace its host with the Docker host's address (or
-`localhost` when opening it on that machine).
-
-The image has no browser of its own: the Browser panel and Pi's `browser` tool need `PI_POCKET_BROWSER_URL`, or a
-browser installed in the container.
-
-`docker-compose.yml` runs the browser beside Pi Pocket as a `chromedp/headless-shell` service and points
-`PI_POCKET_BROWSER_URL` at it:
-
-```bash
-docker compose up --build
-```
-
-The endpoint has no authentication, so it stays on the compose network; port 9222 is not published.
+See [docker/README.md](docker/README.md).
 
 ## Features
 
