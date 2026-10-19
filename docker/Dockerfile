@@ -36,5 +36,10 @@ VOLUME "/home/nonroot/.pi"
 VOLUME "/home/nonroot/.pi-pocket"
 VOLUME "/workspace"
 
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false \
+    PI_SKIP_VERSION_CHECK=1 \
+    PI_OFFLINE=1 \
+    PI_TELEMETRY=0
+
 ENTRYPOINT ["node", "/app/bin/pi-pocket.js"]
 CMD ["--access", "lan", "--cwd", "/workspace"]
