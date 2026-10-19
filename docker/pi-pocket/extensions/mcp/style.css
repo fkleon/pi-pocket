@@ -1,0 +1,205 @@
+/* The MCP page: one card for each server, in the app's colors. */
+.mcp-page {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px 14px 24px;
+    max-width: 760px;
+}
+
+.mcp-server {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--card);
+    min-width: 0;
+}
+
+.mcp-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.mcp-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+.mcp-name {
+    overflow-wrap: anywhere;
+}
+
+.mcp-pill {
+    font-size: 12px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.mcp-pill.ok {
+    color: var(--ok);
+    border-color: var(--ok);
+}
+
+.mcp-pill.warn {
+    color: var(--warn);
+    border-color: var(--warn);
+}
+
+.mcp-pill.err {
+    color: var(--err);
+    border-color: var(--err);
+}
+
+.mcp-pill.busy {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+.mcp-target {
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+
+.mcp-warn {
+    color: var(--warn);
+}
+
+.mcp-error {
+    margin: 0;
+    padding: 8px 10px;
+    max-height: 12em;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    border-radius: 6px;
+    color: var(--err);
+    background: var(--bg);
+}
+
+.mcp-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.mcp-signin {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 10px;
+    border: 1px dashed var(--accent);
+    border-radius: 8px;
+}
+
+.mcp-signin p {
+    margin: 0;
+}
+
+.mcp-signin .mcp-row {
+    align-self: stretch;
+}
+
+.mcp-input {
+    flex: 1 1 14rem;
+    min-width: 0;
+    padding: 6px 8px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+}
+
+.mcp-tools summary,
+.mcp-entry summary {
+    cursor: pointer;
+    color: var(--muted);
+}
+
+.mcp-entry p {
+    margin: 6px 0 0;
+}
+
+.mcp-entry dl {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 6px 0 0;
+}
+
+.mcp-entry dl > div {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 8px;
+    min-width: 0;
+}
+
+.mcp-entry dt {
+    flex: none;
+    color: var(--muted);
+}
+
+.mcp-entry dd {
+    flex: 1 1 12rem;
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.mcp-entry .mcp-changed dt,
+.mcp-entry .mcp-changed dd {
+    color: var(--warn);
+}
+
+.mcp-tools ul {
+    list-style: none;
+    margin: 6px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.mcp-tools li {
+    padding-top: 6px;
+    border-top: 1px solid var(--line);
+    min-width: 0;
+}
+
+.mcp-tools .mono {
+    overflow-wrap: anywhere;
+}
+
+.mcp-hidden {
+    opacity: 0.6;
+}
+
+.mcp-tag {
+    margin-left: 6px;
+    font-size: 11px;
+    padding: 0 6px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+}
+
+.mcp-about {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+}
