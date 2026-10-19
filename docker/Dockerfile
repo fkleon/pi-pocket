@@ -8,6 +8,8 @@ COPY --from=node /usr/local/lib /usr/local/lib
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates git \
+      ripgrep fd-find \
+    && ln -s /bin/fdfind /bin/fd \
     && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
