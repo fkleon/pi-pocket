@@ -97,12 +97,12 @@ Two files gate egress, and both must allow a domain:
 
 - `docker/dnsmasq.conf` forwards only the domains listed with `server=/example.com/#`; every other name gets
   NXDOMAIN. Subdomains are included.
-- `docker/tinyproxy.allowlist.conf` is a list of POSIX basic regular expressions matched against the host, with
-  `FilterDefaultDeny Yes`: only matching hosts pass.
+- `docker/tinyproxy.allowlist.conf` is a list of plain hostnames (fnmatch-style, no regex escaping needed) matched
+  against the host, with `FilterDefaultDeny Yes`: only matching hosts pass.
 
-The defaults allow `radius.earendil.com` (an example provider) and `google.com`. Replace them with the domains your
-models use. If a provider is missing from either file, runs against it fail: DNS refuses the name, or the proxy
-refuses the connection.
+The defaults allow `radius.earendil.com` (an example provider), `radius.pi.dev`, and `pi.dev`. Replace them with the
+domains your models use. If a provider is missing from either file, runs against it fail: DNS refuses the name, or
+the proxy refuses the connection.
 
 After editing either file, recreate the services so they read the new config:
 
@@ -110,16 +110,28 @@ After editing either file, recreate the services so they read the new config:
 docker compose up -d --force-recreate gateway dns-forwarder
 ```
 
+## Configuration files
+
+Several files are copied into the image at build time so the app starts with sensible defaults:
+
+- `docker/pi-pocket/config.json` — Pi Pocket's initial `config.json` with an owner user and the MCP extension
+  enabled. Contains a default `ownerToken` ("letmein") for development; rotate it on first login.
+- `docker/pi/agent/settings.json` — Pi agent settings, including `collapseChangelog: true` and `codemode`
+  enabled by default via `defaultTools`.
+- `docker/pi/agent/mcp.json` — MCP server configuration, pointing to the Radius MCP endpoint.
+- `docker/pi-pocket/extensions/` — the vendored pocket-mcp extension.
+- A remote extension (`whimsical.ts`) is fetched from GitHub at build time.
+
 ## Data and the workspace
 
-Four named volumes hold everything that must survive a container:
+Five named volumes hold everything that must survive a container:
 
-| Volume           | Mounted at                 | Holds                                                                   |
-| ---------------- | -------------------------- | ----------------------------------------------------------------------- |
-| `pi-home`        | `/home/nonroot`            | `$HOME`: git config, SSH keys, package caches, and other per-user state |
-| `pi-data`        | `/home/nonroot/.pi`        | Pi's sign-ins, models, skills, and sessions                             |
-| `pi-pocket-data` | `/home/nonroot/.pi-pocket` | Pi Pocket's `config.json`, `pocket.sqlite`, drop-ins, and themes        |
-| `pi-workspace`   | `/workspace`               | the folder new sessions start in                                        |
+| Volume           | Mounted at                 | Holds                                                                    |
+| ---------------- | -------------------------- | ------------------------------------------------------------------------ |
+| `pi-home`        | `/home/nonroot`            | `$HOME`: git config, SSH keys, package caches, and other per-user state  |
+| `pi-data`        | `/home/nonroot/.pi`        | Pi's sign-ins, models, skills, sessions, and MCP config                  |
+| `pi-pocket-data` | `/home/nonroot/.pi-pocket` | Pi Pocket's `config.json`, `pocket.sqlite`, drop-ins, and themes         |
+| `pi-workspace`   | `/workspace`               | the folder new sessions start in                                         |
 
 None of them bind to a host folder by default. `pi-workspace` is a named volume, not `./workspace`. To work on a host
 folder instead, replace the `pi-workspace` mount in `docker-compose.yml` with a bind mount, and make it writable by
@@ -174,7 +186,8 @@ or `http://<host>:8787` from the network.
 ## Caveats
 
 - The images are not pinned to digests. Pin them for a reproducible build.
-- The app image installs `git` and `ca-certificates` on a Debian base, so Pi's shell tools work. It does not install
-  a browser: that is the `chrome` service.
+- The app image installs `git`, `ca-certificates`, `ripgrep`, and `fd-find` on a Debian base, so Pi's shell tools
+  work. It does not install a browser: that is the `chrome` service.
+- The app runs with `PI_OFFLINE=1` and `PI_TELEMETRY=0` — no version checks or telemetry.
 - `chrome` is capped at 2 GB of memory, 1 GB of shared memory, and 256 processes. Lower `shm_size` only together
   with `--disable-dev-shm-usage`.
