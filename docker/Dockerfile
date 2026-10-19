@@ -38,6 +38,13 @@ COPY \
   --chown=65532:65532 \
   ./docker/pi/agent /home/nonroot/.pi/agent
 
+# Pi Agent: extensions (remote)
+ADD \
+  --checksum=sha256:5e71eddef1e04c104d41fe23d969d8b22f69794f5999d2e46f548260a0211506 \
+  --chown=65532:65532 \
+  https://raw.githubusercontent.com/mitsuhiko/agent-stuff/refs/tags/1.6.0/extensions/whimsical.ts \
+  /home/nonroot/.pi/agent/extensions/
+
 VOLUME "/home/nonroot/.pi"
 VOLUME "/home/nonroot/.pi-pocket"
 VOLUME "/workspace"
