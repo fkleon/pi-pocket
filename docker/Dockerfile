@@ -32,6 +32,12 @@ RUN mkdir /home/nonroot && chown -R nonroot:nonroot /home/nonroot /workspace
 USER 65532
 
 RUN ["mkdir", "--parents", "/home/nonroot/.pi", "/home/nonroot/.pi-pocket"]
+
+# Pi Agent: config and extensions (local)
+COPY \
+  --chown=65532:65532 \
+  ./docker/pi/agent /home/nonroot/.pi/agent
+
 VOLUME "/home/nonroot/.pi"
 VOLUME "/home/nonroot/.pi-pocket"
 VOLUME "/workspace"
