@@ -139,6 +139,7 @@ services:
       HTTP_PROXY: http://gateway:8888
       HTTPS_PROXY: http://gateway:8888
       NO_PROXY: "localhost,127.0.0.1,172.28.0.10,app,gateway,chrome"
+      NODE_USE_ENV_PROXY: 1
       # App config
       PI_POCKET_BROWSER_URL: http://chrome:9222
       #PI_POCKET_BROWSER_URL: http://172.28.0.10:9222
