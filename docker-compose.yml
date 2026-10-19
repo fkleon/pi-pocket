@@ -1,8 +1,7 @@
 name: pi-pocket
 
 # Hardened service configuration template
-x-hardened: &hardened
-  # Read-only root filesystem
+x-hardened: &hardened # Read-only root filesystem
   read_only: true
   # Run as nobody user
   user: "65534:65534"
@@ -60,7 +59,8 @@ services:
     mem_limit: 128m
     cpus: 0.5
     healthcheck:
-      test: ["CMD-SHELL", "curl --fail -x 127.0.0.1:8888 http://tinyproxy.stats"]
+      test:
+        ["CMD-SHELL", "curl --fail -x 127.0.0.1:8888 http://tinyproxy.stats"]
       interval: 10s
       timeout: 3s
       retries: 10
@@ -190,7 +190,7 @@ services:
       - internal
 
 volumes:
-    pi-home:
-    pi-pocket-data:
-    pi-data:
-    pi-workspace:
+  pi-home:
+  pi-pocket-data:
+  pi-data:
+  pi-workspace:
