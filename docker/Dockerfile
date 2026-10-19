@@ -1,8 +1,10 @@
+ARG NODE_VERSION=24
+FROM node:${NODE_VERSION}-trixie-slim AS node
+
 FROM debian:trixie-slim AS pi-pocket
 
-ARG NODE_VERSION=24
-COPY --from=node:${NODE_VERSION}-trixie-slim /usr/local/bin /usr/local/bin
-COPY --from=node:${NODE_VERSION}-trixie-slim /usr/local/lib /usr/local/lib
+COPY --from=node /usr/local/bin /usr/local/bin
+COPY --from=node /usr/local/lib /usr/local/lib
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates git \
