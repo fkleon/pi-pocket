@@ -614,6 +614,9 @@ export class JsonStore<T extends object> {
     }
 }
 
+/** Characters allowed in a tool-filter pattern (exact name or wildcard). */
+const PATTERN_CHARS = /^[A-Za-z0-9_.*-]+$/;
+
 export interface ServerSettings {
     /** The fingerprint of the entry that the owner turned on in Pi Pocket. */
     approved?: string;
@@ -621,6 +624,31 @@ export interface ServerSettings {
     parts?: Record<string, string>;
     /** Plan mode may run the tools that this server marks read-only. */
     planMode?: boolean;
+    /** Tool names or wildcard patterns that Pi does not get to see. */
+    blocked?: string[];
+}
+
+/** Whether a pattern matches a tool name. */
+export function matchesPattern(pattern: string, toolName: string): boolean {
+    const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+
+    return new RegExp(`^${escaped}$`).test(toolName);
+}
+
+/** Whether a value is a valid tool-filter pattern. */
+export function isValidPattern(value: unknown): boolean {
+    return typeof value === "string" && value.length > 0 && PATTERN_CHARS.test(value);
+}
+
+/** Whether the server blocks the given tool name. */
+export function isBlocked(settings: Settings, serverName: string, toolName: string): boolean {
+    const blocked = settings.servers?.[serverName]?.blocked;
+
+    if (!blocked) {
+        return false;
+    }
+
+    return blocked.some((pattern) => matchesPattern(pattern, toolName));
 }
 
 export interface Settings {

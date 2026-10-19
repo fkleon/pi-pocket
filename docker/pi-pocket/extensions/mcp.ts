@@ -29,6 +29,8 @@ import {
     type ServerEntry,
     type ServerSettings,
     type Settings,
+    isBlocked,
+    isValidPattern,
     settingsStore,
     toolExposure,
 } from "./mcp/config.ts";
@@ -118,6 +120,7 @@ interface ServerView {
         description?: string;
         readOnly: boolean;
         hidden: boolean;
+        blocked: boolean;
     }[];
 }
 
@@ -325,6 +328,29 @@ class Servers {
         return true;
     }
 
+    /** Update which tools are blocked for a server. "block" adds, "unblock" removes. */
+    async setToolBlock(name: string, pattern: string, action: "block" | "unblock"): Promise<void> {
+        await this.#settings.update((settings) => {
+            const current = serverSettings(settings, name);
+            const blocked = [...(current.blocked ?? [])];
+
+            if (action === "block") {
+                if (!blocked.includes(pattern)) {
+                    blocked.push(pattern);
+                }
+            } else {
+                const index = blocked.indexOf(pattern);
+
+                if (index >= 0) {
+                    blocked.splice(index, 1);
+                }
+            }
+
+            settings.servers = { ...settings.servers, [name]: { ...current, blocked } };
+        });
+        await this.load();
+    }
+
     /** Whether plan mode may run the tool: the server marks it read-only, and the owner trusts that here. */
     planAllowed(server: Server, tool: Tool): boolean {
         return (
@@ -333,13 +359,18 @@ class Servers {
         );
     }
 
-    /** The tools that Pi may see and call. */
+    /** The tools that Pi may see and call (exposure-based only; blocked tools still show for management). */
     visible(server: Server): Tool[] {
         return server.tools.filter(
             (tool) =>
                 TOOL_NAME.test(tool.name) &&
                 toolExposure(server.entry.config, tool.name) !== "hidden",
         );
+    }
+
+    /** Whether the given tool is blocked by the owner's filter. */
+    isBlocked(server: Server, tool: string): boolean {
+        return isBlocked(this.settings, server.name, tool);
     }
 
     /** Tell the owner's tabs that something changed, at most a few times a second. */
@@ -418,6 +449,7 @@ class Servers {
             tools: (server?.tools ?? []).map((tool) => {
                 const title = titleOf(tool);
                 const description = text(tool.description);
+                const blocked = server ? this.isBlocked(server, tool.name) : false;
 
                 return {
                     name: tool.name,
@@ -425,6 +457,7 @@ class Servers {
                     ...(description === undefined ? {} : { description: cut(description, 600) }),
                     readOnly: tool.annotations?.readOnlyHint === true,
                     hidden: !shown.has(tool),
+                    blocked,
                 };
             }),
         };
@@ -633,6 +666,12 @@ export default function createMcp(host: Host, web: Web) {
         if (tool === undefined) {
             throw new Error(
                 `MCP server ${quote(server.name)} has no tool ${quote(args.tool, 130)}. List its tools with mcp_tools.`,
+            );
+        }
+
+        if (servers.isBlocked(server, tool.name)) {
+            throw new Error(
+                `MCP tool ${quote(tool.name)} on ${quote(server.name)} is blocked. Unblock it on the MCP page.`,
             );
         }
 
@@ -893,6 +932,33 @@ export default function createMcp(host: Host, web: Web) {
 
     web.route("POST", "servers/:name/sign-out", async ({ params }) => {
         await serverOn(params.name!).signOut();
+
+        return servers.view();
+    });
+
+    /** Update the blocked tool patterns for a server. */
+    web.route("POST", "servers/:name/block", async ({ params, body }) => {
+        const { pattern, action } = body as { pattern?: unknown; action?: unknown };
+
+        if (typeof pattern !== "string" || !isValidPattern(pattern)) {
+            throw web.error(
+                400,
+                "pattern must be a non-empty string of letters, digits, _, -, ., or *",
+            );
+        }
+
+        if (action !== "block" && action !== "unblock") {
+            throw web.error(400, "action must be 'block' or 'unblock'");
+        }
+
+        const name = params.name!;
+        const entry = servers.entry(name);
+
+        if (entry === undefined) {
+            throw web.error(404, "No such server in mcp.json");
+        }
+
+        await servers.setToolBlock(name, pattern, action);
 
         return servers.view();
     });

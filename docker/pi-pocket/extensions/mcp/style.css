@@ -196,10 +196,34 @@
     color: var(--muted);
 }
 
+.mcp-tag.blocked {
+    color: var(--err);
+    border-color: var(--err);
+}
+
 .mcp-about {
     display: -webkit-box;
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
     overflow-wrap: anywhere;
+}
+
+.mcp-tools li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+.mcp-tools li > div:first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.mcp-tools li button {
+    flex: none;
+    font-size: 11px;
+    padding: 2px 8px;
+    margin-top: 2px;
 }

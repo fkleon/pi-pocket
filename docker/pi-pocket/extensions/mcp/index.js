@@ -106,23 +106,25 @@ export default function setup(pocket) {
     }
 
     /** The tools that the server lists, with the ones that Pi does not get. */
-    function Tools({ server }) {
+    function Tools({ server, act, busy }) {
         const visible = server.tools.filter((tool) => !tool.hidden).length;
         const hidden = server.tools.length - visible;
+        const blocked = server.tools.filter((tool) => tool.blocked).length;
 
         return html`<details class="mcp-tools">
             <summary class="small">
                 ${visible} ${visible === 1 ? "tool" : "tools"} for
-                Pi${hidden > 0 ? `, ${hidden} hidden` : ""}
+                Pi${hidden > 0 ? `, ${hidden} hidden` : ""}${blocked > 0 ? `, ${blocked} blocked` : ""}
             </summary>
             <ul>
                 ${server.tools.map(
                     (tool) =>
-                        html`<li class=${tool.hidden ? "mcp-hidden" : ""}>
+                        html`<li class=${tool.hidden || tool.blocked ? "mcp-hidden" : ""}>
                             <div>
                                 <span class="mono small">${tool.name}</span>
                                 ${tool.readOnly ? html`<span class="mcp-tag">read-only</span>` : null}
                                 ${tool.hidden ? html`<span class="mcp-tag">hidden</span>` : null}
+                                ${tool.blocked ? html`<span class="mcp-tag blocked">blocked</span>` : null}
                             </div>
                             ${
                                 tool.title || tool.description
@@ -130,6 +132,23 @@ export default function setup(pocket) {
                                       ${[tool.title, tool.description].filter(Boolean).join(" — ")}
                                   </div>`
                                     : null
+                            }
+                            ${
+                                tool.blocked
+                                    ? html`<button
+                                        class="button small"
+                                        disabled=${busy}
+                                        onClick=${() => act(`servers/${encodeURIComponent(server.name)}/block`, { action: "unblock", pattern: tool.name })}
+                                    >
+                                        Unblock
+                                    </button>`
+                                    : html`<button
+                                        class="button small"
+                                        disabled=${busy}
+                                        onClick=${() => act(`servers/${encodeURIComponent(server.name)}/block`, { action: "block", pattern: tool.name })}
+                                    >
+                                        Block
+                                    </button>`
                             }
                         </li>`,
                 )}
@@ -234,7 +253,7 @@ export default function setup(pocket) {
                     onChange=${() => run("plan-mode", { on: !server.planMode })}
                 />
             </div>
-            ${server.tools.length > 0 ? html`<${Tools} server=${server} />` : null}
+            ${server.tools.length > 0 ? html`<${Tools} server=${server} act=${act} busy=${busy} />` : null}
         </section>`;
     }
 
