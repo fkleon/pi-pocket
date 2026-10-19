@@ -1,0 +1,7 @@
+{
+    "mcpServers": {
+        "radius": {
+            "url": "https://radius.pi.dev/mcp"
+        }
+    }
+}

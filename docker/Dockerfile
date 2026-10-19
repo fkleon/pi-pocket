@@ -48,6 +48,10 @@ ADD \
 # Pi Pocket: config and extensions (local)
 COPY \
   --chown=65532:65532 \
+  ./docker/pi-pocket/config.json /home/nonroot/.pi-pocket/config.json
+
+COPY \
+  --chown=65532:65532 \
   ./docker/pi-pocket/extensions /home/nonroot/.pi-pocket/extensions
 
 VOLUME "/home/nonroot/.pi"
