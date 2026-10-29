@@ -9,20 +9,21 @@ export class BrowserError extends Error {}
 export type Json = any;
 type EventListener = (method: string, params: Json) => void;
 
+/** One complete CDP message each way. The transport is a pipe or a WebSocket; nothing above it knows which. */
+export interface Channel {
+    write(message: string): void;
+    onMessage(handler: (message: string) => void): void;
+    onClose(handler: (reason: string) => void): void;
+    close(reason: string): void;
+}
+
 /** Messages are JSON, each ended by a NUL byte: Chromium reads from fd 3 and writes to fd 4. */
-export class Connection {
+export class PipeChannel implements Channel {
     readonly #out: Writable;
     #parts: string[] = [];
-    #next = 0;
-    readonly #pending = new Map<
-        number,
-        { resolve: (value: Json) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }
-    >();
-    readonly #sessions = new Map<string, EventListener>();
-    #closed: string | undefined;
-    /** Events without a session: the browser's own, such as targets appearing. */
-    onEvent: EventListener | undefined;
-    onClose: (() => void) | undefined;
+    #closed = false;
+    #onMessage: ((message: string) => void) | undefined;
+    #onClose: ((reason: string) => void) | undefined;
 
     constructor(out: Writable, input: Readable) {
         this.#out = out;
@@ -33,8 +34,18 @@ export class Connection {
         out.on("error", () => this.close("The browser closed."));
     }
 
-    get closed(): boolean {
-        return this.#closed !== undefined;
+    write(message: string): void {
+        if (!this.#closed) {
+            this.#out.write(`${message}\0`);
+        }
+    }
+
+    onMessage(handler: (message: string) => void): void {
+        this.#onMessage = handler;
+    }
+
+    onClose(handler: (reason: string) => void): void {
+        this.#onClose = handler;
     }
 
     #receive(chunk: string): void {
@@ -46,7 +57,7 @@ export class Connection {
             const text = this.#parts.join("");
 
             this.#parts = [];
-            this.#dispatch(text);
+            this.#onMessage?.(text);
             start = end + 1;
             end = chunk.indexOf("\0", start);
         }
@@ -54,6 +65,40 @@ export class Connection {
         if (start < chunk.length) {
             this.#parts.push(chunk.slice(start));
         }
+    }
+
+    close(reason: string): void {
+        if (this.#closed) {
+            return;
+        }
+
+        this.#closed = true;
+        this.#onClose?.(reason);
+    }
+}
+
+/** The DevTools protocol over a channel, and the bookkeeping above it. */
+export class Connection {
+    readonly #channel: Channel;
+    #next = 0;
+    readonly #pending = new Map<
+        number,
+        { resolve: (value: Json) => void; reject: (error: Error) => void; timer: NodeJS.Timeout }
+    >();
+    readonly #sessions = new Map<string, EventListener>();
+    #closed: string | undefined;
+    /** Events without a session: the browser's own, such as targets appearing. */
+    onEvent: EventListener | undefined;
+    onClose: (() => void) | undefined;
+
+    constructor(channel: Channel) {
+        this.#channel = channel;
+        channel.onMessage((text) => this.#dispatch(text));
+        channel.onClose((reason) => this.close(reason));
+    }
+
+    get closed(): boolean {
+        return this.#closed !== undefined;
     }
 
     #dispatch(text: string): void {
@@ -119,8 +164,12 @@ export class Connection {
 
             timer.unref();
             this.#pending.set(id, { resolve, reject, timer });
-            this.#out.write(
-                `${JSON.stringify(sessionId === undefined ? { id, method, params } : { id, method, params, sessionId })}\0`,
+            this.#channel.write(
+                JSON.stringify(
+                    sessionId === undefined
+                        ? { id, method, params }
+                        : { id, method, params, sessionId },
+                ),
             );
         });
     }
@@ -147,6 +196,7 @@ export class Connection {
 
         this.#pending.clear();
         this.#sessions.clear();
+        this.#channel.close(reason);
         this.onClose?.();
     }
 }
@@ -234,22 +284,15 @@ export class Chromium {
             throw new BrowserError(`Could not start ${executable}.`);
         }
 
-        const connection = new Connection(child.stdio[3] as Writable, child.stdio[4] as Readable);
+        const connection = new Connection(
+            new PipeChannel(child.stdio[3] as Writable, child.stdio[4] as Readable),
+        );
         const chromium = new Chromium(child, connection);
 
         child.once("exit", () => connection.close("The browser stopped."));
 
         try {
-            const version = await Promise.race([
-                connection.send("Browser.getVersion", {}, undefined, 20_000),
-                failed,
-            ]);
-
-            chromium.userAgent = String(version.userAgent ?? "").replace(
-                "HeadlessChrome/",
-                "Chrome/",
-            );
-            await connection.send("Target.setDiscoverTargets", { discover: true });
+            chromium.userAgent = await Promise.race([handshake(connection), failed]);
         } catch (error) {
             chromium.kill();
 
@@ -271,5 +314,63 @@ export class Chromium {
 
         force.unref();
         this.#child.once("exit", () => clearTimeout(force));
+    }
+}
+
+/** A connected browser: its CDP connection, its user agent, and how to let it go. */
+export interface BrowserLink {
+    readonly connection: Connection;
+    readonly userAgent: string;
+    /** Resolves when the browser is gone: the process exited, or the socket closed. */
+    readonly exited: Promise<void>;
+    /** Stop the browser, or let go of one Pi Pocket does not own. */
+    stop(): void;
+}
+
+/** Where a browser comes from: a child process Pi Pocket starts, or a CDP endpoint it connects to. */
+export interface BrowserSource {
+    /** For the panel and the log: the executable's path, or the endpoint. */
+    readonly label: string;
+    readonly available: boolean;
+    connect(): Promise<BrowserLink>;
+}
+
+/** The handshake every browser answers: its user agent, and target discovery. */
+export async function handshake(connection: Connection): Promise<string> {
+    const version = await connection.send("Browser.getVersion", {}, undefined, 20_000);
+    const userAgent = String(version.userAgent ?? "").replace("HeadlessChrome/", "Chrome/");
+
+    await connection.send("Target.setDiscoverTargets", { discover: true });
+
+    return userAgent;
+}
+
+/** Chromium on this machine, started as a child and driven over its pipe. */
+export class LocalBrowser implements BrowserSource {
+    readonly label: string;
+    readonly #executable: string;
+    readonly #profile: string;
+    readonly #extra: readonly string[];
+
+    constructor(executable: string, profile: string, extra: readonly string[] = []) {
+        this.#executable = executable;
+        this.#profile = profile;
+        this.#extra = extra;
+        this.label = executable;
+    }
+
+    get available(): boolean {
+        return true;
+    }
+
+    async connect(): Promise<BrowserLink> {
+        const chromium = await Chromium.launch(this.#executable, this.#profile, this.#extra);
+
+        return {
+            connection: chromium.connection,
+            userAgent: chromium.userAgent,
+            exited: chromium.exited,
+            stop: () => chromium.kill(),
+        };
     }
 }
