@@ -9,7 +9,8 @@
  * conversations. Pages are memory only: a restart closes them, and each conversation's last address and size come back
  * from its saved state when its page is next opened.
  */
-import { BrowserError, Chromium } from "./browser/cdp.ts";
+import { BrowserError, LocalBrowser, type BrowserLink, type BrowserSource } from "./browser/cdp.ts";
+import { RemoteBrowser } from "./browser/remote.ts";
 import { findBrowser, profileFolder } from "./browser/discovery.ts";
 import { BrowserPage, type BrowserState, type Saved, wait } from "./browser/page.ts";
 import { type Viewport, VIEWPORTS, viewportFrom } from "./browser/viewport.ts";
@@ -27,6 +28,8 @@ export type OpenOptions = {
 export interface BrowsersOptions {
     /** Where the browser's profile goes: `browser/` in it. */
     dataDir: string;
+    /** The browser to connect to, instead of one found on this machine. */
+    source?: BrowserSource;
     /** The browser to run. Undefined finds one; null means there is none (tests). */
     executable?: string | null;
     /** Extra Chromium flags, such as `--no-sandbox` where sandboxes are not available. */
@@ -47,7 +50,9 @@ export interface BrowsersOptions {
 export class Browsers {
     readonly #options: BrowsersOptions;
     #executable: string | null | undefined;
-    #chromium: Promise<Chromium> | undefined;
+    #link: Promise<BrowserLink> | undefined;
+    /** The source, worked out once: `null` means there is none. */
+    #sourceCache: BrowserSource | undefined | null = null;
     readonly #pages = new Map<number, BrowserPage>();
     readonly #opening = new Map<number, Promise<BrowserPage>>();
     readonly #listeners = new Set<(conversationId: number, state: BrowserState) => void>();
@@ -75,8 +80,46 @@ export class Browsers {
         return this.#executable ?? undefined;
     }
 
+    /** Where the browser comes from: one given, a CDP endpoint, or Chromium on this machine. */
+    #source(): BrowserSource | undefined {
+        if (this.#sourceCache === null) {
+            this.#sourceCache = this.#findSource() ?? undefined;
+        }
+
+        return this.#sourceCache;
+    }
+
+    #findSource(): BrowserSource | undefined {
+        if (this.#options.source !== undefined) {
+            return this.#options.source;
+        }
+
+        const endpoint = process.env.PI_POCKET_BROWSER_URL?.trim();
+
+        if (endpoint !== undefined && endpoint !== "") {
+            return new RemoteBrowser(endpoint);
+        }
+
+        const executable = this.executable;
+
+        if (executable === undefined) {
+            return undefined;
+        }
+
+        const extra = [
+            ...(this.#options.args ?? []),
+            ...(process.env.PI_POCKET_BROWSER_ARGS?.split(/\s+/).filter(Boolean) ?? []),
+        ];
+
+        return new LocalBrowser(
+            executable,
+            profileFolder(executable, this.#options.dataDir),
+            extra,
+        );
+    }
+
     get available(): boolean {
-        return this.executable !== undefined;
+        return this.#source()?.available ?? false;
     }
 
     subscribe(listener: (conversationId: number, state: BrowserState) => void): () => void {
@@ -137,17 +180,17 @@ export class Browsers {
         this.#pending.set(conversationId, timer);
     }
 
-    async #browser(): Promise<Chromium> {
-        const executable = this.executable;
+    async #browser(): Promise<BrowserLink> {
+        const source = this.#source();
 
-        if (executable === undefined) {
+        if (source === undefined) {
             throw new BrowserError(
-                "No Chromium-based browser was found on this machine. Install Chromium or Google Chrome, or set PI_POCKET_BROWSER to a browser's path.",
+                "No Chromium-based browser was found on this machine. Install Chromium or Google Chrome, or set PI_POCKET_BROWSER to a browser's path, or PI_POCKET_BROWSER_URL to a DevTools endpoint.",
             );
         }
 
-        if (this.#chromium !== undefined) {
-            const running = await this.#chromium.catch(() => undefined);
+        if (this.#link !== undefined) {
+            const running = await this.#link.catch(() => undefined);
 
             if (running !== undefined && !running.connection.closed) {
                 return running;
@@ -158,34 +201,26 @@ export class Browsers {
             throw new BrowserError("The server is stopping.");
         }
 
-        const extra = [
-            ...(this.#options.args ?? []),
-            ...(process.env.PI_POCKET_BROWSER_ARGS?.split(/\s+/).filter(Boolean) ?? []),
-        ];
-        const launching = Chromium.launch(
-            executable,
-            profileFolder(executable, this.#options.dataDir),
-            extra,
-        );
+        const connecting = source.connect();
 
-        this.#chromium = launching;
-        launching.catch(() => {
-            if (this.#chromium === launching) {
-                this.#chromium = undefined;
+        this.#link = connecting;
+        connecting.catch(() => {
+            if (this.#link === connecting) {
+                this.#link = undefined;
             }
         });
-        const chromium = await launching;
+        const link = await connecting;
 
         // The server began stopping while the browser started: nothing will stop this one later.
         if (this.#closing) {
-            chromium.kill();
+            link.stop();
 
             throw new BrowserError("The server is stopping.");
         }
 
-        this.#options.log?.(`Browser started: ${executable}`);
+        this.#options.log?.(`Browser started: ${source.label}`);
 
-        chromium.connection.onEvent = (method, params) => {
+        link.connection.onEvent = (method, params) => {
             if (!method.startsWith("Target.")) {
                 return;
             }
@@ -208,9 +243,9 @@ export class Browsers {
             }
         };
 
-        chromium.connection.onClose = () => {
-            if (this.#chromium === launching) {
-                this.#chromium = undefined;
+        link.connection.onClose = () => {
+            if (this.#link === connecting) {
+                this.#link = undefined;
             }
 
             for (const page of this.#pages.values()) {
@@ -218,7 +253,7 @@ export class Browsers {
             }
         };
 
-        return chromium;
+        return link;
     }
 
     /**
@@ -272,8 +307,8 @@ export class Browsers {
             throw new BrowserError("The browser was closed.");
         }
 
-        const chromium = await this.#browser();
-        const connection = chromium.connection;
+        const link = await this.#browser();
+        const connection = link.connection;
         const { browserContextId } = await connection.send("Target.createBrowserContext", {
             disposeOnDetach: false,
         });
@@ -298,7 +333,7 @@ export class Browsers {
                 session: sessionId,
                 target: targetId,
                 context: browserContextId,
-                userAgent: chromium.userAgent,
+                userAgent: link.userAgent,
                 viewport: viewportFrom(saved?.viewport) ??
                     options.viewport ?? { ...VIEWPORTS.desktop },
                 changed: () => this.#changed(conversationId),
@@ -356,9 +391,9 @@ export class Browsers {
         }
 
         this.#changed(conversationId);
-        const chromium = await this.#chromium?.catch(() => undefined);
+        const link = await this.#link?.catch(() => undefined);
 
-        await chromium?.connection
+        await link?.connection
             .send("Target.disposeBrowserContext", { browserContextId: page.contextId })
             .catch(() => {});
     }
@@ -376,7 +411,7 @@ export class Browsers {
         if (
             this.#pages.size === 0 &&
             this.#opening.size === 0 &&
-            this.#chromium !== undefined &&
+            this.#link !== undefined &&
             Date.now() - this.#idleSince > 5 * 60_000
         ) {
             void this.#stopBrowser();
@@ -384,17 +419,17 @@ export class Browsers {
     }
 
     async #stopBrowser(): Promise<void> {
-        const pending = this.#chromium;
+        const pending = this.#link;
 
-        this.#chromium = undefined;
-        const chromium = await pending?.catch(() => undefined);
+        this.#link = undefined;
+        const link = await pending?.catch(() => undefined);
 
-        if (chromium === undefined) {
+        if (link === undefined) {
             return;
         }
 
-        chromium.kill();
-        await Promise.race([chromium.exited, wait(4000)]);
+        link.stop();
+        await Promise.race([link.exited, wait(4000)]);
     }
 
     /** Close every page and stop the browser, as the server stops or the browser is turned off. */
