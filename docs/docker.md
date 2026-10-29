@@ -77,6 +77,39 @@ The service sets `no-new-privileges`: no process in the container can gain privi
 
 On an SELinux host, add `:Z` to bind mounts, or run `chcon` on the folders yourself.
 
+## Remote CDP browser service
+
+Instead of running Chromium inside the `pi-pocket` container, you can run a standalone browser service such as `chromedp/headless-shell` on an internal Docker network and connect Pi Pocket via `PI_POCKET_BROWSER_URL`:
+
+```yaml
+services:
+    pi-pocket:
+        # ... (standard configuration)
+        environment:
+            # Point to the remote browser service:
+            PI_POCKET_BROWSER_URL: http://headless-shell:9222
+        depends_on:
+            - headless-shell
+
+    headless-shell:
+        image: chromedp/headless-shell:latest
+        restart: unless-stopped
+        init: true
+        tmpfs:
+            - /tmp
+        shm_size: 1g
+        security_opt:
+            - no-new-privileges:true
+```
+
+In `.env`, set:
+
+```dotenv
+PI_POCKET_BROWSER_URL=http://headless-shell:9222
+```
+
+Pi Pocket connects over HTTP to fetch `/json/version` and resolves the DevTools WebSocket URL. Because the browser runs in its own container, its `localhost` and local files are separate from Pi Pocket's container. Keep the browser service on a private Docker network, as CDP endpoints do not have authentication.
+
 ## Updating
 
 The source is copied into the image, so rebuild after pulling:
