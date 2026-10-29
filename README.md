@@ -112,7 +112,7 @@ npm run lint    # check the layout rules
 - Only one server process can use the database at a time.
 - Pi's own extensions are not supported. Pi Pocket runs its own, on Pi Durable.
 - A git worktree keeps a session's files apart; it is not a sandbox.
-- The built-in browser needs Chromium, Chrome, Brave, or Edge on the server. It is tested on Linux and macOS.
+- The built-in browser needs Chromium, Chrome, Brave, or Edge on the server, or a remote CDP endpoint (`PI_POCKET_BROWSER_URL`). It is tested on Linux and macOS.
 
 The [full list](docs/features.md#limitations) has the details.
 
