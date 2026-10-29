@@ -35,6 +35,9 @@ services:
             # Chromium runs without its sandbox inside a container; /dev/shm is small there.
             PI_POCKET_BROWSER: /usr/bin/chromium
             PI_POCKET_BROWSER_ARGS: ${PI_POCKET_BROWSER_ARGS:---no-sandbox --disable-dev-shm-usage}
+            # Or use a separate browser container via CDP (e.g. headless-shell):
+            # PI_POCKET_BROWSER_URL: ${PI_POCKET_BROWSER_URL:-}
+            #
             # Uncomment to make Lancet Guard unavailable:
             # PI_POCKET_GUARD: off
             #
